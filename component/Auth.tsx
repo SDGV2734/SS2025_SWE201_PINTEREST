@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Alert, StyleSheet, View, AppState } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Input } from '@rneui/themed'
-import { red100 } from 'react-native-paper/lib/typescript/styles/themes/v2/colors'
 
 AppState.addEventListener('change', (state) => {
   if (state === 'active') {
