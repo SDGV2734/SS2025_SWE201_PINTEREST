@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Alert, StyleSheet, View, AppState } from 'react-native'
+import { Alert, StyleSheet, View, AppState, Text, Image } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Input } from '@rneui/themed'
 
@@ -20,7 +20,7 @@ export default function Auth() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email,
       options: {
-        emailRedirectTo: 'yourapp://callback', // optional deep link for mobile apps
+        emailRedirectTo: 'yourapp://callback',
       },
     })
 
@@ -34,18 +34,28 @@ export default function Auth() {
 
   return (
     <View style={styles.container}>
+      
       <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Input
-          label="Email"
-          leftIcon={{ type: 'font-awesome', name: 'envelope' }}
-          onChangeText={(text) => setEmail(text)}
-          value={email}
-          placeholder="email@address.com"
-          autoCapitalize={'none'}
+      <Image source={require('../assets/Brand_Guidelines_hero_2x.webp')} style={{width: 200, height: 200, alignSelf: 'center', marginTop: -300}}/>
+
+        <Text style={{ fontSize: 24, fontWeight: 'bold',textAlign : 'center'}}>Welcome</Text>
+        <Text style={{ fontSize: 16, textAlign: 'center' }}>Sign in with your email</Text>
+          <Input
+            placeholder="example@mail.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            onChangeText={(text) => setEmail(text)}
+            value={email}
+            leftIcon={{ name: 'envelope', type: 'font-awesome', size: 20, color: 'black' }}
+            containerStyle={{ marginTop: 20 }}
+            inputContainerStyle={{ borderBottomWidth: 1, borderBottomColor: 'black' }}
         />
       </View>
       <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Button title="Send Magic Link" disabled={loading} onPress={signInWithMagicLink} />
+        <Button title="Send Magic Link" disabled={loading} onPress={signInWithMagicLink}
+        buttonStyle={{ backgroundColor: 'red'}} loading={loading}
+        titleStyle={{ fontWeight: 'bold' }} icon={{ name: 'envelope', type: 'font-awesome', size: 20, color: 'white' }}
+        />
       </View>
     </View>
   )
