@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { supabase } from "./lib/supabase";
-import Auth from "./component/Auth";
-import Feeds from "./component/Feeds";
+import Auth from "./service/Auth";
+import Feeds from "./service/Feeds";
 import { Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 
