@@ -6,20 +6,26 @@ import { Button, Input } from "@rneui/themed";
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [message, setMessage] = useState("");
 
-  async function signInWithMagicLink() {
+  async function signInOrSignUpWithMagicLink() {
     setLoading(true);
+    setMessage("");
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: "pinterestclone://feeds", 
+        emailRedirectTo: "pinterestclone://feeds",
       },
     });
-
     if (error) {
       Alert.alert("Error sending magic link", error.message);
     } else {
-      Alert.alert("Check your email for the magic link!");
+      setMessage(
+        `Check your email for the magic link to ${
+          mode === "signin" ? "sign in" : "sign up"
+        }!`
+      );
     }
     setLoading(false);
   }
@@ -27,31 +33,55 @@ export default function Auth() {
   return (
     <View style={styles.wrapper}>
       <Text style={styles.title}>Welcome</Text>
-      <Text style={styles.subtitle}>Sign in with your email</Text>
+      <Text style={styles.subtitle}>
+        {mode === "signin"
+          ? "Sign in with your email"
+          : "Sign up with your email"}
+      </Text>
       <Input
         placeholder="example@mail.com"
         autoCapitalize="none"
         keyboardType="email-address"
         onChangeText={setEmail}
         value={email}
-        leftIcon={{ name: "envelope", type: "font-awesome", size: 20, color: "black" }}
+        leftIcon={{
+          name: "envelope",
+          type: "font-awesome",
+          size: 20,
+          color: "black",
+        }}
         containerStyle={styles.inputContainer}
         inputContainerStyle={styles.inputUnderline}
       />
       <Button
-        title="Send Magic Link"
-        disabled={loading}
-        onPress={signInWithMagicLink}
+        title={mode === "signin" ? "Send Sign In Link" : "Send Sign Up Link"}
+        disabled={loading || !email}
+        onPress={signInOrSignUpWithMagicLink}
         loading={loading}
         buttonStyle={styles.button}
         titleStyle={styles.buttonTitle}
-        icon={{ name: "envelope", type: "font-awesome", size: 20, color: "white" }}
+        icon={{
+          name: "envelope",
+          type: "font-awesome",
+          size: 20,
+          color: "white",
+        }}
       />
+      {message ? (
+        <Text style={{ marginTop: 20, color: "green", textAlign: "center" }}>
+          {message}
+        </Text>
+      ) : null}
       <Text
-        onPress={() => Alert.alert("Navigate to Sign Up")}
+        onPress={() => {
+          setMode(mode === "signin" ? "signup" : "signin");
+          setMessage("");
+        }}
         style={{ marginTop: 20, color: "blue", textAlign: "center" }}
       >
-        Don't have an account? Sign up
+        {mode === "signin"
+          ? "Don't have an account? Sign up"
+          : "Already have an account? Sign in"}
       </Text>
     </View>
   );

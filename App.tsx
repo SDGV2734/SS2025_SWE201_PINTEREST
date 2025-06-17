@@ -3,7 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { supabase } from "./lib/supabase";
 import Auth from "./service/Auth";
-import Feeds from "./service/Feeds";
+import Feeds from "./presentation/Feeds";
 import { Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 
