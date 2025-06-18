@@ -1,102 +1,103 @@
-import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { supabase } from "./lib/supabase";
-import Auth from "./service/Auth";
-import Feeds from "./presentation/Feeds";
-import PinUploadScreen from "./business/imageUpload";
-import { Session } from "@supabase/supabase-js";
-import * as Linking from "expo-linking";
+"use client"
 
-const Stack = createNativeStackNavigator();
+import { useState, useEffect } from "react"
+import { NavigationContainer } from "@react-navigation/native"
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
+import type { Session } from "@supabase/supabase-js"
+import { supabase } from "./lib/supabase"
+import AuthNavigator from "./navigation/AuthNavigator"
+import FeedScreen from "./screens/FeedScreen"
+import UploadScreen from "./screens/UploadScreen"
+import ProfileScreen from "./screens/ProfileScreen"
+import { Text, View, ActivityIndicator } from "react-native"
 
-const linking = {
-  prefixes: ["pinterestclone://"],
-  config: {
-    screens: {
-      Auth: "auth",
-      Feeds: "feeds",
-    },
-  },
-};
+const Tab = createBottomTabNavigator()
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // On app launch, check for active session first
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+      console.log("Initial session check:", !!session)
+      setSession(session)
+      setLoading(false)
+    })
 
-    // Listen for auth state changes (sign in, sign out)
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      }
-    );
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("Auth state changed:", _event, !!session, session?.user?.id)
+      setSession(session)
+      setLoading(false)
+    })
 
-    // Listen for deep links (handle magic link)
-    const handleDeepLink = async (event: Linking.EventType) => {
-      const url = event.url;
-      if (url) {
-        // Parse url for access_token from fragment (#access_token=...)
-        const fragment = url.split("#")[1];
-        if (fragment) {
-          const params = new URLSearchParams(fragment);
-          const access_token = params.get("access_token");
-          if (access_token) {
-            try {
-              // Restore session from access token
-              await supabase.auth.setSession({
-                access_token,
-                refresh_token: params.get("refresh_token") ?? "",
-              });
-              const {
-                data: { session },
-              } = await supabase.auth.getSession();
-              setSession(session);
-            } catch (error) {
-              console.error("Error restoring session from magic link", error);
-            }
-          }
-        }
-      }
-    };
+    return () => subscription.unsubscribe()
+  }, [])
 
-    // Subscribe to deep link events
-    const linkingSubscription = Linking.addEventListener("url", handleDeepLink);
+  // Show loading screen while checking auth state
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+        <ActivityIndicator size="large" color="#e60023" />
+        <Text style={{ marginTop: 16, fontSize: 16, color: "#666" }}>Loading...</Text>
+      </View>
+    )
+  }
 
-    // Also handle initial URL on app cold start
-    (async () => {
-      const initialUrl = await Linking.getInitialURL();
-      if (initialUrl) {
-        handleDeepLink({ url: initialUrl });
-      }
-    })();
+  // Show auth screens if no session
+  if (!session) {
+    console.log("No session found, showing auth screens")
+    return (
+      <NavigationContainer>
+        <AuthNavigator />
+      </NavigationContainer>
+    )
+  }
 
-    return () => {
-      listener?.subscription.unsubscribe();
-      linkingSubscription.remove();
-    };
-  }, []);
-
-  if (loading) return null; // Or splash screen
-
+  // Show main app if user is signed in
+  console.log("Session found, showing main app")
   return (
-    <NavigationContainer linking={linking}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {session?.user ? (
-          <>
-            <Stack.Screen name="Feeds" component={Feeds} />
-            <Stack.Screen name="PinUpload" component={PinUploadScreen} />
-          </>
-        ) : (
-          <Stack.Screen name="Auth" component={Auth} />
-        )}
-      </Stack.Navigator>
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: "#e60023",
+          tabBarInactiveTintColor: "#666",
+          headerStyle: {
+            backgroundColor: "#fff",
+          },
+          headerTitleStyle: {
+            fontWeight: "bold",
+          },
+        }}
+      >
+        <Tab.Screen
+          name="Feed"
+          component={FeedScreen}
+          options={{
+            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>🏠</Text>,
+            title: "Home",
+          }}
+        />
+        <Tab.Screen
+          name="Upload"
+          component={UploadScreen}
+          options={{
+            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>➕</Text>,
+            title: "Upload",
+          }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{
+            tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>👤</Text>,
+            title: "Profile",
+          }}
+        />
+      </Tab.Navigator>
     </NavigationContainer>
-  );
+  )
 }
