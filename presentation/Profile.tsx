@@ -7,7 +7,6 @@ import {
   ScrollView,
   Alert,
   Modal,
-  TextInput,
 } from "react-native";
 import { Icon, Button, Input } from "@rneui/themed";
 import { useNavigation } from "@react-navigation/native";
