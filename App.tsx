@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { supabase } from "./lib/supabase";
 import Auth from "./service/Auth";
 import Feeds from "./presentation/Feeds";
+import PinUploadScreen from "./business/imageUpload";
 import { Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 
@@ -31,9 +32,11 @@ export default function App() {
     });
 
     // Listen for auth state changes (sign in, sign out)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
 
     // Listen for deep links (handle magic link)
     const handleDeepLink = async (event: Linking.EventType) => {
@@ -52,7 +55,9 @@ export default function App() {
                 access_token,
                 refresh_token: params.get("refresh_token") || "",
               });
-              const { data: { session } } = await supabase.auth.getSession();
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
               setSession(session);
             } catch (error) {
               console.error("Error restoring session from magic link", error);
@@ -85,7 +90,10 @@ export default function App() {
     <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session?.user ? (
-          <Stack.Screen name="Feeds" component={Feeds} />
+          <>
+            <Stack.Screen name="Feeds" component={Feeds} />
+            <Stack.Screen name="PinUpload" component={PinUploadScreen} />
+          </>
         ) : (
           <Stack.Screen name="Auth" component={Auth} />
         )}

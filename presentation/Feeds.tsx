@@ -1,6 +1,7 @@
 import React from "react";
 import { View, FlatList, Text, Image, StyleSheet } from "react-native";
 import { Button, Icon } from "@rneui/themed";
+import { useNavigation } from "@react-navigation/native";
 
 const mockPins = [
   {
@@ -24,6 +25,8 @@ const mockPins = [
 ];
 
 export default function Feeds() {
+  const navigation = useNavigation<any>();
+
   const renderItem = ({ item }: { item: (typeof mockPins)[0] }) => (
     <View style={styles.pinContainer}>
       <Image source={{ uri: item.image_url }} style={styles.image} />
@@ -64,7 +67,7 @@ export default function Feeds() {
           title="Create"
           titleStyle={styles.navTitle}
           containerStyle={styles.navButton}
-          onPress={() => {}}
+          onPress={() => navigation.navigate("PinUpload")}
         />
         <Button
           type="clear"
