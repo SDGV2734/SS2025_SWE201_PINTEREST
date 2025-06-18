@@ -53,7 +53,7 @@ export default function PinUploadScreen() {
       const blob = await response.blob();
 
       // Upload to storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("image-upload-dump")
         .upload(filePath, blob);
 
@@ -65,7 +65,7 @@ export default function PinUploadScreen() {
         .getPublicUrl(filePath);
 
       // Insert record into pins table
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("pins")
         .insert([
           {

@@ -43,7 +43,6 @@ export default function App() {
       const url = event.url;
       if (url) {
         // Parse url for access_token from fragment (#access_token=...)
-        const parsed = Linking.parse(url);
         const fragment = url.split("#")[1];
         if (fragment) {
           const params = new URLSearchParams(fragment);
@@ -53,7 +52,7 @@ export default function App() {
               // Restore session from access token
               await supabase.auth.setSession({
                 access_token,
-                refresh_token: params.get("refresh_token") || "",
+                refresh_token: params.get("refresh_token") ?? "",
               });
               const {
                 data: { session },
