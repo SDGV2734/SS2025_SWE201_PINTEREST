@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { supabase } from "./lib/supabase";
 import Auth from "./service/Auth";
 import Feeds from "./presentation/Feeds";
+import Profile from "./presentation/Profile";
 import { Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 
@@ -15,6 +16,7 @@ const linking = {
     screens: {
       Auth: "auth",
       Feeds: "feeds",
+      Profile: "profile",
     },
   },
 };
@@ -31,16 +33,15 @@ export default function App() {
     });
 
     // Listen for auth state changes (sign in, sign out)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    // Listen for deep links (handle magic link)
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    ); // Listen for deep links (handle magic link)
     const handleDeepLink = async (event: Linking.EventType) => {
       const url = event.url;
       if (url) {
         // Parse url for access_token from fragment (#access_token=...)
-        const parsed = Linking.parse(url);
         const fragment = url.split("#")[1];
         if (fragment) {
           const params = new URLSearchParams(fragment);
@@ -50,9 +51,11 @@ export default function App() {
               // Restore session from access token
               await supabase.auth.setSession({
                 access_token,
-                refresh_token: params.get("refresh_token") || "",
+                refresh_token: params.get("refresh_token") ?? "",
               });
-              const { data: { session } } = await supabase.auth.getSession();
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
               setSession(session);
             } catch (error) {
               console.error("Error restoring session from magic link", error);
@@ -80,12 +83,18 @@ export default function App() {
   }, []);
 
   if (loading) return null; // Or splash screen
-
   return (
     <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session?.user ? (
-          <Stack.Screen name="Feeds" component={Feeds} />
+          <>
+            <Stack.Screen name="Feeds">
+              {(props) => <Feeds {...props} session={session} />}
+            </Stack.Screen>
+            <Stack.Screen name="Profile">
+              {(props) => <Profile {...props} session={session} />}
+            </Stack.Screen>
+          </>
         ) : (
           <Stack.Screen name="Auth" component={Auth} />
         )}
