@@ -10,6 +10,8 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../lib/supabase";
@@ -24,6 +26,29 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
   const [image, setImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+
+  // Test network connectivity
+  async function testNetworkConnection() {
+    try {
+      setUploadProgress("Testing connection...");
+      const { data, error } = await supabase
+        .from("posts")
+        .select("count")
+        .limit(1);
+
+      if (error) {
+        throw new Error(`Database connection failed: ${error.message}`);
+      }
+
+      console.log("Network test successful");
+      return true;
+    } catch (error: any) {
+      console.error("Network test failed:", error);
+      throw new Error(
+        "Unable to connect to the server. Please check your internet connection."
+      );
+    }
+  }
 
   async function pickImage() {
     try {
@@ -64,6 +89,9 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
     setUploadProgress("Preparing upload...");
 
     try {
+      // Test network connectivity first
+      await testNetworkConnection();
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -112,20 +140,64 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
       }
 
       // Upload image to Supabase Storage with optimized settings
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("posts")
-        .upload(fileName, blob, {
-          contentType: blob.type || `image/${fileExt}`,
-          cacheControl: "3600", // Cache for 1 hour
-          upsert: false, // Don't overwrite existing files
-        });
+      console.log("Starting Supabase upload...");
+      setUploadProgress("Connecting to storage...");
 
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
+      try {
+        // Test Supabase connection first
+        const { data: testData, error: testError } = await supabase.storage
+          .from("posts")
+          .list("", { limit: 1 });
+
+        if (testError) {
+          console.error("Storage connection test failed:", testError);
+          throw new Error(`Storage connection failed: ${testError.message}`);
+        }
+
+        console.log("Storage connection successful, proceeding with upload...");
+        setUploadProgress("Uploading to storage...");
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("posts")
+          .upload(fileName, blob, {
+            contentType: blob.type || `image/${fileExt}`,
+            cacheControl: "3600", // Cache for 1 hour
+            upsert: false, // Don't overwrite existing files
+          });
+
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+
+          // Check if it's a network issue
+          if (
+            uploadError.message.includes("Network") ||
+            uploadError.message.includes("fetch") ||
+            uploadError.message.includes("Failed to fetch")
+          ) {
+            throw new Error(
+              "Network connection failed. Please check your internet connection and try again."
+            );
+          }
+
+          throw new Error(`Upload failed: ${uploadError.message}`);
+        }
+
+        console.log("Upload successful:", uploadData);
+      } catch (networkError: any) {
+        console.error("Network/Upload error:", networkError);
+
+        // Provide specific error messages for different scenarios
+        if (
+          networkError.message.includes("Network request failed") ||
+          networkError.message.includes("fetch")
+        ) {
+          throw new Error(
+            "Unable to connect to storage server. Please check your internet connection and try again."
+          );
+        }
+
+        throw networkError;
       }
-
-      console.log("Upload successful:", uploadData);
       setUploadProgress("Saving post...");
 
       // Get public URL with better error handling
@@ -200,102 +272,172 @@ export default function UploadScreen({ navigation }: UploadScreenProps) {
     } catch (error: any) {
       console.error("Upload process error:", error);
       setUploadProgress("");
-      Alert.alert(
-        "Upload Failed",
-        error.message || "An unexpected error occurred. Please try again."
-      );
+
+      // Provide specific error messages based on the error type
+      let errorMessage = "An unexpected error occurred. Please try again.";
+
+      if (
+        error.message.includes("Network") ||
+        error.message.includes("fetch") ||
+        error.message.includes("connection")
+      ) {
+        errorMessage =
+          "Network connection failed. Please check your internet connection and try again.";
+      } else if (
+        error.message.includes("auth") ||
+        error.message.includes("user")
+      ) {
+        errorMessage = "Authentication error. Please sign in again.";
+      } else if (
+        error.message.includes("storage") ||
+        error.message.includes("upload")
+      ) {
+        errorMessage =
+          "File upload failed. Please try selecting a different image.";
+      } else if (
+        error.message.includes("size") ||
+        error.message.includes("large")
+      ) {
+        errorMessage =
+          "Image file is too large. Please select a smaller image.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert("Upload Failed", errorMessage);
     } finally {
       setUploading(false);
     }
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Upload New Post</Text>
-
-      <TouchableOpacity
-        style={styles.imagePickerButton}
-        onPress={pickImage}
-        disabled={uploading}
+    <KeyboardAvoidingView
+      style={styles.keyboardAvoidingView}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+    >
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
-        {image ? (
-          <Image source={{ uri: image }} style={styles.selectedImage} />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>📷</Text>
-            <Text style={styles.imagePlaceholderSubtext}>
-              Tap to select image
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Post title *"
-          value={title}
-          onChangeText={setTitle}
-          editable={!uploading}
-          maxLength={100}
-        />
-
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Description (optional)"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          editable={!uploading}
-          maxLength={500}
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.uploadButton,
-            uploading && styles.uploadButtonDisabled,
-          ]}
-          onPress={uploadImage}
-          disabled={uploading || !image || !title.trim()}
-        >
-          <Text style={styles.uploadButtonText}>
-            {uploading ? "Uploading..." : "Upload Post"}
-          </Text>
-        </TouchableOpacity>
-
-        {uploading && (
-          <View style={styles.progressContainer}>
-            <Text style={styles.uploadingText}>{uploadProgress}</Text>
-            <View style={styles.progressBar}>
-              <View style={styles.progressFill} />
+        {/* Enhanced Header */}
+        <View style={styles.uploadHeader}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerIconContainer}>
+              <Text style={styles.headerIcon}>📤</Text>
+            </View>
+            <Text style={styles.headerTitle}>Upload</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerActionButton}>
+                <Text style={styles.actionIcon}>📋</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        )}
+        </View>
 
-        {!uploading && (title.trim() || description.trim() || image) && (
+        <View style={styles.content}>
           <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => {
-              setTitle("");
-              setDescription("");
-              setImage(null);
-              setUploadProgress("");
-            }}
+            style={styles.imagePickerButton}
+            onPress={pickImage}
+            disabled={uploading}
           >
-            <Text style={styles.clearButtonText}>Clear Form</Text>
+            {image ? (
+              <Image source={{ uri: image }} style={styles.selectedImage} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderText}>📷</Text>
+                <Text style={styles.imagePlaceholderSubtext}>
+                  Tap to select image
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Post title *"
+                value={title}
+                onChangeText={setTitle}
+                editable={!uploading}
+                maxLength={100}
+                returnKeyType="next"
+                blurOnSubmit={false}
+              />
+              <Text style={styles.characterCounter}>{title.length}/100</Text>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Description (optional)"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+                editable={!uploading}
+                maxLength={500}
+                returnKeyType="done"
+                textAlignVertical="top"
+              />
+              <Text style={styles.characterCounter}>
+                {description.length}/500
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.uploadButton,
+                uploading && styles.uploadButtonDisabled,
+              ]}
+              onPress={uploadImage}
+              disabled={uploading || !image || !title.trim()}
+            >
+              <Text style={styles.uploadButtonText}>
+                {uploading ? "Uploading..." : "Upload Post"}
+              </Text>
+            </TouchableOpacity>
+
+            {uploading && (
+              <View style={styles.progressContainer}>
+                <Text style={styles.uploadingText}>{uploadProgress}</Text>
+                <View style={styles.progressBar}>
+                  <View style={styles.progressFill} />
+                </View>
+              </View>
+            )}
+
+            {!uploading && (title.trim() || description.trim() || image) && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setTitle("");
+                  setDescription("");
+                  setImage(null);
+                  setUploadProgress("");
+                }}
+              >
+                <Text style={styles.clearButtonText}>Clear Form</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoidingView: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 16,
   },
   title: {
     fontSize: 24,
@@ -334,12 +476,21 @@ const styles = StyleSheet.create({
   form: {
     gap: 16,
   },
+  inputContainer: {
+    marginBottom: 8,
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
+  },
+  characterCounter: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "right",
+    marginTop: 4,
   },
   textArea: {
     height: 100,
@@ -394,5 +545,62 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 14,
     fontWeight: "500",
+  },
+  // Header Styles
+  uploadHeader: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#e60023",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerIcon: {
+    fontSize: 20,
+    color: "#fff",
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#333",
+    flex: 1,
+    textAlign: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
+  },
+  headerActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  actionIcon: {
+    fontSize: 16,
+    color: "#666",
+  },
+  content: {
+    padding: 16,
   },
 });

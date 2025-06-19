@@ -1,57 +1,66 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Alert, StyleSheet, View, Text, TextInput, TouchableOpacity } from "react-native"
-import { supabase } from "../lib/supabase"
+import { useState, useEffect } from "react";
+import {
+  Alert,
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { supabase } from "../lib/supabase";
 
 interface SignInScreenProps {
-  navigation: any
-  route?: any
+  navigation: any;
+  route?: any;
 }
 
 export default function SignInScreen({ navigation, route }: SignInScreenProps) {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Pre-fill email if coming from signup
   useEffect(() => {
     if (route?.params?.prefillEmail) {
-      setEmail(route.params.prefillEmail)
+      setEmail(route.params.prefillEmail);
     }
-  }, [route?.params?.prefillEmail])
+  }, [route?.params?.prefillEmail]);
 
   async function signInWithEmail() {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Error", "Please fill in all fields")
-      return
+      Alert.alert("Error", "Please fill in all fields");
+      return;
     }
 
     // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert("Error", "Please enter a valid email address")
-      return
+      Alert.alert("Error", "Please enter a valid email address");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
 
     try {
-      console.log("Attempting to sign in with email:", email.trim())
+      console.log("Attempting to sign in with email:", email.trim());
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
-      })
+      });
 
       console.log("Sign in response:", {
         hasUser: !!data?.user,
         hasSession: !!data?.session,
         error: error?.message,
-      })
+      });
 
       if (error) {
-        console.error("Sign in error details:", error)
+        console.error("Sign in error details:", error);
 
         if (error.message.includes("Invalid login credentials")) {
           Alert.alert(
@@ -64,8 +73,8 @@ export default function SignInScreen({ navigation, route }: SignInScreenProps) {
                 style: "default",
                 onPress: () => resetPassword(),
               },
-            ],
-          )
+            ]
+          );
         } else if (error.message.includes("Email not confirmed")) {
           Alert.alert(
             "Email Not Confirmed",
@@ -77,133 +86,166 @@ export default function SignInScreen({ navigation, route }: SignInScreenProps) {
                 style: "default",
                 onPress: () => resendConfirmation(),
               },
-            ],
-          )
+            ]
+          );
         } else if (error.message.includes("Too many requests")) {
-          Alert.alert("Too Many Attempts", "Please wait a few minutes before trying again.")
+          Alert.alert(
+            "Too Many Attempts",
+            "Please wait a few minutes before trying again."
+          );
         } else {
-          Alert.alert("Error", `Sign in failed: ${error.message}`)
+          Alert.alert("Error", `Sign in failed: ${error.message}`);
         }
       } else if (data?.user && data?.session) {
-        console.log("Sign in successful!")
+        console.log("Sign in successful!");
         // Clear form on success
-        setEmail("")
-        setPassword("")
+        setEmail("");
+        setPassword("");
       }
     } catch (error: any) {
-      console.error("Sign in exception:", error)
-      Alert.alert("Error", "An unexpected error occurred. Please try again.")
+      console.error("Sign in exception:", error);
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function resetPassword() {
     if (!email.trim()) {
-      Alert.alert("Error", "Please enter your email address first")
-      return
+      Alert.alert("Error", "Please enter your email address first");
+      return;
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
 
       if (error) {
-        Alert.alert("Error", error.message)
+        Alert.alert("Error", error.message);
       } else {
-        Alert.alert("Password Reset", "Check your email for password reset instructions.")
+        Alert.alert(
+          "Password Reset",
+          "Check your email for password reset instructions."
+        );
       }
     } catch (error: any) {
-      Alert.alert("Error", "Failed to send password reset email.")
+      Alert.alert("Error", "Failed to send password reset email.");
     }
   }
 
   async function resendConfirmation() {
     if (!email.trim()) {
-      Alert.alert("Error", "Please enter your email address first")
-      return
+      Alert.alert("Error", "Please enter your email address first");
+      return;
     }
 
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: email.trim(),
-      })
+      });
 
       if (error) {
-        Alert.alert("Error", error.message)
+        Alert.alert("Error", error.message);
       } else {
-        Alert.alert("Email Sent", "Check your email for the confirmation link.")
+        Alert.alert(
+          "Email Sent",
+          "Check your email for the confirmation link."
+        );
       }
     } catch (error: any) {
-      Alert.alert("Error", "Failed to resend confirmation email.")
+      Alert.alert("Error", "Failed to resend confirmation email.");
     }
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your Pinterest account</Text>
+    <KeyboardAvoidingView
+      style={styles.keyboardAvoidingView}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to your Image Board account</Text>
+        </View>
+
+        <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!loading}
+              returnKeyType="next"
+              blurOnSubmit={false}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+              editable={!loading}
+              returnKeyType="done"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={signInWithEmail}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? "Signing In..." : "Sign In"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.forgotPasswordButton}
+            onPress={resetPassword}
+            disabled={loading}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => navigation.navigate("SignUp")}
+            disabled={loading}
+          >
+            <Text style={styles.linkText}>
+              Don't have an account?{" "}
+              <Text style={styles.linkTextBold}>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!loading}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="password"
-            editable={!loading}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={signInWithEmail}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>{loading ? "Signing In..." : "Sign In"}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.forgotPasswordButton} onPress={resetPassword} disabled={loading}>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate("SignUp")} disabled={loading}>
-          <Text style={styles.linkText}>
-            Don't have an account? <Text style={styles.linkTextBold}>Sign Up</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  )
+    </KeyboardAvoidingView>
+  );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoidingView: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   container: {
     flex: 1,
     backgroundColor: "#fff",
@@ -295,4 +337,4 @@ const styles = StyleSheet.create({
     color: "#e60023",
     fontWeight: "bold",
   },
-})
+});

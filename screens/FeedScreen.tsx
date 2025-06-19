@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,74 +12,91 @@ import {
   TextInput,
   Modal,
   ScrollView,
-} from "react-native"
-import { supabase } from "../lib/supabase"
-import type { Post, Comment } from "../types"
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+} from "react-native";
+import { supabase } from "../lib/supabase";
+import type { Post, Comment } from "../types";
 
 export default function FeedScreen() {
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
-  const [comments, setComments] = useState<Comment[]>([])
-  const [newComment, setNewComment] = useState("")
-  const [currentUserId, setCurrentUserId] = useState<string>("")
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [loadingComments, setLoadingComments] = useState(false);
 
   useEffect(() => {
-    getCurrentUser()
-    fetchPosts()
-  }, [])
+    getCurrentUser();
+    fetchPosts();
+  }, []);
 
   async function getCurrentUser() {
     const {
       data: { user },
-    } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+    } = await supabase.auth.getUser();
+    if (user) setCurrentUserId(user.id);
   }
 
   async function fetchPosts() {
     try {
       const { data, error } = await supabase
         .from("posts")
-        .select(`
+        .select(
+          `
           *,
           profiles (username, full_name, avatar_url),
           likes (id, user_id),
           comments (id)
-        `)
-        .order("created_at", { ascending: false })
+        `
+        )
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
+      if (error) throw error;
 
       const postsWithCounts =
         data?.map((post) => ({
           ...post,
           likes_count: post.likes?.length || 0,
           comments_count: post.comments?.length || 0,
-          is_liked: post.likes?.some((like: any) => like.user_id === currentUserId) || false,
-        })) || []
+          is_liked:
+            post.likes?.some((like: any) => like.user_id === currentUserId) ||
+            false,
+        })) || [];
 
-      setPosts(postsWithCounts)
+      setPosts(postsWithCounts);
+      setLastRefresh(new Date());
     } catch (error: any) {
-      Alert.alert("Error", error.message)
+      Alert.alert("Error", error.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function toggleLike(postId: string) {
     try {
-      const post = posts.find((p) => p.id === postId)
-      if (!post) return
+      const post = posts.find((p) => p.id === postId);
+      if (!post) return;
 
       if (post.is_liked) {
-        await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", currentUserId)
+        await supabase
+          .from("likes")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", currentUserId);
       } else {
-        await supabase.from("likes").insert({ post_id: postId, user_id: currentUserId })
+        await supabase
+          .from("likes")
+          .insert({ post_id: postId, user_id: currentUserId });
       }
 
-      fetchPosts()
+      fetchPosts();
     } catch (error: any) {
-      Alert.alert("Error", error.message)
+      Alert.alert("Error", error.message);
     }
   }
 
@@ -90,67 +107,114 @@ export default function FeedScreen() {
         .select("id")
         .eq("post_id", postId)
         .eq("user_id", currentUserId)
-        .single()
+        .single();
 
       if (existingPin) {
-        await supabase.from("pins").delete().eq("post_id", postId).eq("user_id", currentUserId)
-        Alert.alert("Success", "Post unpinned!")
+        await supabase
+          .from("pins")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", currentUserId);
+        Alert.alert("Success", "Post unpinned!");
       } else {
-        await supabase.from("pins").insert({ post_id: postId, user_id: currentUserId })
-        Alert.alert("Success", "Post pinned!")
+        await supabase
+          .from("pins")
+          .insert({ post_id: postId, user_id: currentUserId });
+        Alert.alert("Success", "Post pinned!");
       }
     } catch (error: any) {
-      Alert.alert("Error", error.message)
+      Alert.alert("Error", error.message);
     }
   }
 
   async function fetchComments(postId: string) {
+    setLoadingComments(true);
     try {
       const { data, error } = await supabase
         .from("comments")
-        .select(`
+        .select(
+          `
           *,
           profiles (username, full_name)
-        `)
+        `
+        )
         .eq("post_id", postId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: true });
 
-      if (error) throw error
-      setComments(data || [])
+      if (error) throw error;
+      setComments(data || []);
     } catch (error: any) {
-      Alert.alert("Error", error.message)
+      Alert.alert("Error", error.message);
+    } finally {
+      setLoadingComments(false);
     }
   }
 
   async function addComment() {
-    if (!newComment.trim() || !selectedPost) return
+    if (!newComment.trim() || !selectedPost) return;
 
     try {
       const { error } = await supabase.from("comments").insert({
         post_id: selectedPost.id,
         user_id: currentUserId,
         content: newComment.trim(),
-      })
+      });
 
-      if (error) throw error
+      if (error) throw error;
 
-      setNewComment("")
-      fetchComments(selectedPost.id)
-      fetchPosts()
+      setNewComment("");
+      fetchComments(selectedPost.id);
+      fetchPosts();
     } catch (error: any) {
-      Alert.alert("Error", error.message)
+      Alert.alert("Error", error.message);
     }
   }
 
   function openComments(post: Post) {
-    setSelectedPost(post)
-    fetchComments(post.id)
+    setSelectedPost(post);
+    fetchComments(post.id);
   }
 
   function closeComments() {
-    setSelectedPost(null)
-    setComments([])
-    setNewComment("")
+    setSelectedPost(null);
+    setComments([]);
+    setNewComment("");
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      // Get the current post count before refresh
+      const previousPostCount = posts.length;
+
+      // Fetch the latest posts
+      await fetchPosts();
+
+      // Update last refresh time
+      setLastRefresh(new Date());
+
+      // Check if there are new posts after refresh
+      setTimeout(() => {
+        const newPostCount = posts.length;
+        if (newPostCount > previousPostCount) {
+          const newPostsCount = newPostCount - previousPostCount;
+          Alert.alert(
+            "Fresh Content! 🎉",
+            `Found ${newPostsCount} new ${
+              newPostsCount === 1 ? "post" : "posts"
+            }!`,
+            [{ text: "Great!", style: "default" }]
+          );
+        }
+      }, 500); // Small delay to ensure state is updated
+    } catch (error) {
+      Alert.alert(
+        "Refresh Failed",
+        "Unable to get the latest content. Please try again."
+      );
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   const renderPost = ({ item }: { item: Post }) => (
@@ -158,7 +222,9 @@ export default function FeedScreen() {
       <View style={styles.postHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.profiles?.username?.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>
+              {item.profiles?.username?.charAt(0).toUpperCase()}
+            </Text>
           </View>
           <Text style={styles.username}>{item.profiles?.username}</Text>
         </View>
@@ -168,77 +234,192 @@ export default function FeedScreen() {
 
       <View style={styles.postContent}>
         <Text style={styles.postTitle}>{item.title}</Text>
-        {item.description && <Text style={styles.postDescription}>{item.description}</Text>}
+        {item.description && (
+          <Text style={styles.postDescription}>{item.description}</Text>
+        )}
       </View>
 
       <View style={styles.postActions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => toggleLike(item.id)}>
-          <Text style={[styles.actionText, item.is_liked && styles.liked]}>❤️ {item.likes_count}</Text>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => toggleLike(item.id)}
+        >
+          <Text style={[styles.actionText, item.is_liked && styles.liked]}>
+            ❤️ {item.likes_count}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => openComments(item)}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => openComments(item)}
+        >
           <Text style={styles.actionText}>💬 {item.comments_count}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => togglePin(item.id)}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => togglePin(item.id)}
+        >
           <Text style={styles.actionText}>📌 Pin</Text>
         </TouchableOpacity>
       </View>
     </View>
-  )
+  );
 
   if (loading) {
     return (
       <View style={styles.centered}>
         <Text>Loading...</Text>
       </View>
-    )
+    );
   }
 
   return (
     <View style={styles.container}>
+      {/* Enhanced Header */}
+      <View style={styles.feedHeader}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerIconContainer}>
+            <Text style={styles.headerIcon}>🏠</Text>
+          </View>
+          <Text style={styles.feedTitle}>Home</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerActionButton}>
+              <Text style={styles.actionIcon}>🔍</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Text style={styles.lastRefreshText}>
+          Last updated:{" "}
+          {lastRefresh.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </View>
+
       <FlatList
         data={posts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.feedContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#e60023"
+            title="Pull to refresh..."
+            titleColor="#666"
+            colors={["#e60023"]} // Android
+            progressBackgroundColor="#fff" // Android
+          />
+        }
       />
 
       <Modal visible={!!selectedPost} animationType="slide">
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
+        >
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Comments</Text>
+            <Text style={styles.modalTitle}>Comments ({comments.length})</Text>
             <TouchableOpacity onPress={closeComments}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.commentsContainer}>
-            {comments.map((comment) => (
-              <View key={comment.id} style={styles.commentItem}>
-                <Text style={styles.commentUser}>{comment.profiles?.username}</Text>
-                <Text style={styles.commentText}>{comment.content}</Text>
-              </View>
-            ))}
-          </ScrollView>
+          {loadingComments ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading comments...</Text>
+            </View>
+          ) : comments.length === 0 ? (
+            <View style={styles.emptyCommentsContainer}>
+              <Text style={styles.emptyCommentsIcon}>💬</Text>
+              <Text style={styles.emptyCommentsText}>No comments yet</Text>
+              <Text style={styles.emptyCommentsSubtext}>
+                Be the first to comment!
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.commentsContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+            >
+              {comments.map((comment) => (
+                <View key={comment.id} style={styles.commentItem}>
+                  <View style={styles.commentHeader}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>
+                        {comment.profiles?.username?.charAt(0).toUpperCase() ||
+                          "?"}
+                      </Text>
+                    </View>
+                    <View style={styles.commentContent}>
+                      <View style={styles.commentMeta}>
+                        <Text style={styles.commentUser}>
+                          {comment.profiles?.username || "Anonymous"}
+                        </Text>
+                        <Text style={styles.commentTime}>
+                          {new Date(comment.created_at).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentText}>{comment.content}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
-          <View style={styles.commentInput}>
-            <TextInput
-              style={styles.input}
-              placeholder="Add a comment..."
-              value={newComment}
-              onChangeText={setNewComment}
-              multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={addComment}>
-              <Text style={styles.sendButtonText}>Send</Text>
+          <View style={styles.commentInputContainer}>
+            <View style={styles.commentInput}>
+              <TextInput
+                style={styles.input}
+                placeholder="Add a comment..."
+                placeholderTextColor="#999"
+                value={newComment}
+                onChangeText={setNewComment}
+                multiline
+                maxLength={500}
+              />
+              <Text style={styles.characterCounter}>
+                {newComment.length}/500
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !newComment.trim() && styles.sendButtonDisabled,
+              ]}
+              onPress={addComment}
+              disabled={!newComment.trim()}
+            >
+              <Text
+                style={[
+                  styles.sendButtonText,
+                  !newComment.trim() && styles.sendButtonTextDisabled,
+                ]}
+              >
+                Send
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -253,6 +434,65 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     padding: 16,
+  },
+  feedHeader: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#e60023",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerIcon: {
+    fontSize: 20,
+    color: "#fff",
+  },
+  headerActions: {
+    flexDirection: "row",
+  },
+  headerActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  actionIcon: {
+    fontSize: 16,
+    color: "#666",
+  },
+  feedTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#333",
+    flex: 1,
+    textAlign: "center",
+  },
+  lastRefreshText: {
+    fontSize: 12,
+    color: "#999",
+    fontStyle: "italic",
   },
   postContainer: {
     marginBottom: 24,
@@ -329,7 +569,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
@@ -338,48 +580,134 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   closeButton: {
-    fontSize: 18,
+    fontSize: 20,
     color: "#666",
+    fontWeight: "bold",
+    padding: 8,
+    minWidth: 32,
+    textAlign: "center",
   },
   commentsContainer: {
     flex: 1,
     padding: 16,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+  },
+  emptyCommentsContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyCommentsIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyCommentsText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
+  },
+  emptyCommentsSubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
   commentItem: {
     marginBottom: 16,
   },
-  commentUser: {
+  commentHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  commentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#e60023",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  commentAvatarText: {
+    color: "#fff",
     fontWeight: "bold",
+    fontSize: 14,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentMeta: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 4,
   },
-  commentText: {
-    color: "#666",
+  commentUser: {
+    fontWeight: "bold",
+    fontSize: 14,
+    marginRight: 8,
   },
-  commentInput: {
-    flexDirection: "row",
-    padding: 16,
+  commentTime: {
+    fontSize: 12,
+    color: "#999",
+  },
+  commentText: {
+    color: "#333",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  commentInputContainer: {
+    backgroundColor: "#f8f8f8",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: "#eee",
-    alignItems: "flex-end",
+  },
+  commentInput: {
+    flexDirection: "column",
+    marginBottom: 12,
+  },
+  characterCounter: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "right",
+    marginTop: 4,
   },
   input: {
-    flex: 1,
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 20,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+    paddingVertical: 12,
     maxHeight: 100,
+    fontSize: 14,
+    backgroundColor: "#fff",
   },
   sendButton: {
     backgroundColor: "#e60023",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    alignSelf: "flex-end",
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#ccc",
   },
   sendButtonText: {
     color: "#fff",
     fontWeight: "bold",
+    fontSize: 14,
   },
-})
+  sendButtonTextDisabled: {
+    color: "#999",
+  },
+});
